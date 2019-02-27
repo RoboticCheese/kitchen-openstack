@@ -47,8 +47,27 @@ module Kitchen
           vanilla_options.select { |o| bdm[o] }.each do |key|
             opt[key] = bdm[key]
           end
+          
+          volume_name = config[:volume_name] || "#{config[:server_name]}-volume"
+
+          if bdm[:reuse_volume]
+            @logger.info "Attempting to re-use old Volume..."
+            volume = volume(os).volumes.find { |x| x.name == volume_name }
+
+            if volume
+              if !volume.attachments.empty?
+                @logger.info "Volume already attached. Force dettaching ..."
+                volume.service.action(volume.id, 'os-reset_status' => {:attach_status => 'detached'})
+                volume.reset_status('available')
+                volume.wait_for { ready? }
+              end
+            end
+
+            return volume.id if volume
+          end
+
           @logger.info "Creating Volume..."
-          resp = volume(os).create_volume("#{config[:server_name]}-volume",
+          resp = volume(os).create_volume(volume_name,
                                           "#{config[:server_name]} volume",
                                           bdm[:volume_size],
                                           opt)
